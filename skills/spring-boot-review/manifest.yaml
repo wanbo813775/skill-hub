@@ -1,8 +1,8 @@
 name: spring-boot-review
-version: 1.0.0
+version: 1.0.1
 description: >
-  Review Spring Boot projects for architecture, security, API design,
-  data access, performance, and maintainability.
+  审查 Spring Boot 项目的架构、安全性、API 设计、数据访问、
+  性能和可维护性。
 author: Seven
 entrypoint: SKILL.md
 targets:
@@ -10,12 +10,12 @@ targets:
   - claude-code
   - deepseek-harness
 categories:
-  - backend
+  - 后端
   - java
 tags:
   - java
   - spring-boot
-  - review
-  - security
+  - 代码审查
+  - 安全
 license: MIT
 updated: 2026-09-21

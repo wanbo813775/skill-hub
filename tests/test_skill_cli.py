@@ -28,9 +28,9 @@ class SkillCliTest(unittest.TestCase):
         return result
 
     def test_validate_and_search(self):
-        self.assertIn("Validation passed", self.run_cli("validate").stdout)
+        self.assertIn("校验通过", self.run_cli("validate").stdout)
         self.assertIn("spring-boot-review", self.run_cli("search", "spring").stdout)
-        self.assertIn("No skills found", self.run_cli("search", "missing-query").stdout)
+        self.assertIn("没有找到 Skill", self.run_cli("search", "missing-query").stdout)
 
     def test_install_update_and_uninstall_user_skill(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -43,7 +43,7 @@ class SkillCliTest(unittest.TestCase):
             duplicate = self.run_cli(
                 "install", "spring-boot-review", "--target", "codex", home=home, expected=1
             )
-            self.assertIn("Destination exists", duplicate.stderr)
+            self.assertIn("目标已存在", duplicate.stderr)
 
             self.run_cli("update", "spring-boot-review", "--target", "codex", home=home)
             self.run_cli(

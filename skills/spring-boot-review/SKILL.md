@@ -1,36 +1,36 @@
 ---
 name: spring-boot-review
-description: Review Spring Boot projects for architecture, security, API design, data access, performance, and maintainability. Use when a user asks for a Spring Boot code review, audit, risk assessment, or pre-release check; do not use for ordinary feature implementation.
+description: 审查 Spring Boot 项目的架构、安全性、API 设计、数据访问、性能和可维护性。当用户要求进行 Spring Boot 代码审查、审计、风险评估或发布前检查时使用；不要将它用于普通功能开发。
 ---
 
-# Spring Boot Review
+# Spring Boot 项目审查
 
-Review the project and report evidence-backed findings. Diagnose first; do not modify code unless the user also asks for fixes.
+审查项目并报告有代码或配置证据支持的问题。先完成诊断；除非用户同时要求修复，否则不要修改代码。
 
-## Scope the review
+## 确定审查范围
 
-Start with the build files, runtime configuration, application entry point, and package structure. Then inspect the layers and cross-cutting code that are relevant to the request, such as controllers, services, repositories, security configuration, filters, interceptors, exception handlers, migrations, and tests.
+先检查构建文件、运行时配置、应用入口和包结构。然后根据用户需求，检查相关分层和横切代码，例如 Controller、Service、Repository、安全配置、过滤器、拦截器、异常处理器、数据库迁移和测试。
 
-Adapt the depth to the repository and the user's goal. Do not require a layer or file merely because it is common in Spring Boot.
+根据仓库实际情况和用户目标调整审查深度。不要仅因某个分层或文件在 Spring Boot 中常见，就强制项目必须包含它。
 
-For a broad audit, read [references/review-checklist.md](references/review-checklist.md). For a focused request, read only the relevant section.
+进行全面审查时，读取 [references/review-checklist.md](references/review-checklist.md)。处理聚焦的审查请求时，只读取与请求相关的章节。
 
-## Review rules
+## 审查规则
 
-- Support each finding with a concrete file and tight line range when available.
-- Distinguish demonstrated defects from risks that depend on runtime configuration or deployment context.
-- Prioritize exploitable security issues, data corruption, availability failures, and broken public contracts.
-- Avoid style-only findings unless they materially reduce maintainability or violate an explicit project convention.
-- Check existing tests and configuration before claiming behavior is missing.
-- Never expose credentials or secret values found during inspection; identify their location and type instead.
+- 尽可能为每个问题提供具体文件和精确的行号范围。
+- 区分已经被代码证实的缺陷，与依赖运行时配置或部署环境才会成立的风险。
+- 优先报告可被利用的安全问题、数据损坏、可用性故障和公开接口违约。
+- 除非风格问题会实质影响可维护性，或违反项目的明确规范，否则不要报告纯风格问题。
+- 在声称某个行为缺失之前，检查现有测试和配置。
+- 绝不暴露审查中发现的凭据或密钥值；只说明它们所在的位置和类型。
 
-## Output
+## 输出格式
 
-Lead with the overall risk and the highest-impact findings. Group findings by severity:
+开头先给出整体风险和影响最大的问题。按严重程度分组：
 
-- Critical: immediate compromise, destructive data loss, or production-wide failure.
-- High: likely security, correctness, or availability failure with substantial impact.
-- Medium: real defect or maintainability risk with bounded impact.
-- Low: worthwhile improvement with limited current impact.
+- 严重：可直接导致系统被入侵、破坏性数据丢失或全局生产故障。
+- 高：很可能导致影响较大的安全、正确性或可用性故障。
+- 中：已确认的缺陷或可维护性风险，影响范围有限。
+- 低：值得实施、但当前影响较小的改进。
 
-For each finding include the severity, location, observed problem, impact, and a practical recommendation. If no actionable findings are supported by the inspected code, say so and note any important coverage gaps or unverified assumptions.
+每个问题都应包含严重程度、位置、观察到的问题、影响和可执行的修复建议。如果被审查的代码不足以支持任何可操作问题，应明确说明，并列出重要的审查覆盖缺口或尚未验证的假设。

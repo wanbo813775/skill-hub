@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dependency-free CLI for the Agent Skill Hub."""
+"""Agent Skill Hub 的无第三方依赖命令行工具。"""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import re
 import shutil
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 from typing import Iterable
 
@@ -30,15 +31,30 @@ class SkillError(Exception):
     pass
 
 
+class ChineseArgumentParser(argparse.ArgumentParser):
+    """将 argparse 默认帮助中的固定英文标题转换为中文。"""
+
+    def format_help(self) -> str:
+        positional_heading = "命令：\n" if self.prog == "skill" else "参数：\n"
+        return (
+            super()
+            .format_help()
+            .replace("usage: ", "用法：")
+            .replace("positional arguments:\n", positional_heading)
+            .replace("options:\n", "选项：\n")
+            .replace("show this help message and exit", "显示帮助信息并退出")
+        )
+
+
 def load_registry() -> dict:
     try:
         data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
-        raise SkillError(f"Registry not found: {REGISTRY_PATH}") from exc
+        raise SkillError(f"找不到索引文件：{REGISTRY_PATH}") from exc
     except json.JSONDecodeError as exc:
-        raise SkillError(f"Invalid registry.json: {exc}") from exc
+        raise SkillError(f"registry.json 格式无效：{exc}") from exc
     if not isinstance(data, dict) or not isinstance(data.get("skills"), list):
-        raise SkillError("registry.json must contain a 'skills' array")
+        raise SkillError("registry.json 必须包含 'skills' 数组")
     return data
 
 
@@ -53,18 +69,18 @@ def skills_by_name() -> dict[str, dict]:
 def require_skill(name: str) -> dict:
     skill = skills_by_name().get(name)
     if skill is None:
-        raise SkillError(f"Skill not found: {name}")
+        raise SkillError(f"找不到 Skill：{name}")
     return skill
 
 
 def skill_source(skill: dict) -> Path:
     raw_path = skill.get("path")
     if not isinstance(raw_path, str):
-        raise SkillError(f"Skill {skill.get('name', '<unknown>')} has no valid path")
+        raise SkillError(f"Skill {skill.get('name', '<未知>')} 没有有效路径")
     source = (ROOT / raw_path).resolve()
     skills_root = (ROOT / "skills").resolve()
     if source.parent != skills_root:
-        raise SkillError(f"Skill path must be a direct child of {skills_root}: {raw_path}")
+        raise SkillError(f"Skill 路径必须是 {skills_root} 的直接子目录：{raw_path}")
     return source
 
 
@@ -72,14 +88,14 @@ def parse_frontmatter(path: Path) -> dict[str, str]:
     try:
         content = path.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
-        raise SkillError(f"Missing SKILL.md: {path}") from exc
+        raise SkillError(f"缺少 SKILL.md：{path}") from exc
     lines = content.splitlines()
     if not lines or lines[0].strip() != "---":
-        raise SkillError(f"{path}: YAML frontmatter must start on the first line")
+        raise SkillError(f"{path}：YAML frontmatter 必须从第一行开始")
     try:
         end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
     except StopIteration as exc:
-        raise SkillError(f"{path}: YAML frontmatter is not closed") from exc
+        raise SkillError(f"{path}：YAML frontmatter 没有正确闭合") from exc
     metadata: dict[str, str] = {}
     for line in lines[1:end]:
         match = re.match(r"^([A-Za-z0-9_-]+):\s*(.*?)\s*$", line)
@@ -121,16 +137,16 @@ def validate_skill(skill: dict) -> list[str]:
     errors: list[str] = []
     name = skill.get("name")
     if not isinstance(name, str) or not NAME_PATTERN.fullmatch(name) or len(name) > 64:
-        return [f"invalid registry name: {name!r}"]
+        return [f"索引中的名称无效：{name!r}"]
 
     try:
         source = skill_source(skill)
     except SkillError as exc:
         return [str(exc)]
     if source.name != name:
-        errors.append(f"{name}: directory must be named {name}")
+        errors.append(f"{name}：目录名必须是 {name}")
     if not source.is_dir():
-        errors.append(f"{name}: source directory does not exist: {source}")
+        errors.append(f"{name}：源目录不存在：{source}")
         return errors
 
     try:
@@ -139,37 +155,37 @@ def validate_skill(skill: dict) -> list[str]:
         errors.append(str(exc))
         metadata = {}
     if metadata.get("name") != name:
-        errors.append(f"{name}: SKILL.md name must match registry")
+        errors.append(f"{name}：SKILL.md 中的 name 必须与索引一致")
     description = metadata.get("description", "")
     if not description:
-        errors.append(f"{name}: SKILL.md description is required")
+        errors.append(f"{name}：SKILL.md 必须包含 description")
     elif len(description) > 1024:
-        errors.append(f"{name}: SKILL.md description exceeds 1024 characters")
+        errors.append(f"{name}：SKILL.md 中的 description 超过 1024 个字符")
 
     version = skill.get("version")
     if not isinstance(version, str) or not VERSION_PATTERN.fullmatch(version):
-        errors.append(f"{name}: version must use semantic versioning")
+        errors.append(f"{name}：version 必须使用语义化版本")
     registry_description = skill.get("description")
     if not isinstance(registry_description, str) or not registry_description.strip():
-        errors.append(f"{name}: registry description is required")
+        errors.append(f"{name}：索引中必须包含 description")
     targets = skill.get("targets")
     if not isinstance(targets, list) or not targets:
-        errors.append(f"{name}: targets must be a non-empty array")
+        errors.append(f"{name}：targets 必须是非空数组")
     elif unknown := sorted(set(targets) - set(DECLARED_TARGETS.values())):
-        errors.append(f"{name}: unsupported targets: {', '.join(unknown)}")
+        errors.append(f"{name}：不支持的目标客户端：{', '.join(unknown)}")
 
     manifest = source / "manifest.yaml"
     if not manifest.is_file():
-        errors.append(f"{name}: manifest.yaml is required by this repository")
+        errors.append(f"{name}：本仓库要求提供 manifest.yaml")
     else:
         if manifest_scalar(manifest, "name") != name:
-            errors.append(f"{name}: manifest name must match registry")
+            errors.append(f"{name}：manifest 中的 name 必须与索引一致")
         if manifest_scalar(manifest, "version") != version:
-            errors.append(f"{name}: manifest version must match registry")
+            errors.append(f"{name}：manifest 中的 version 必须与索引一致")
         if manifest_scalar(manifest, "entrypoint") != "SKILL.md":
-            errors.append(f"{name}: manifest entrypoint must be SKILL.md")
+            errors.append(f"{name}：manifest 中的 entrypoint 必须是 SKILL.md")
         if set(manifest_list(manifest, "targets")) != set(targets or []):
-            errors.append(f"{name}: manifest targets must match registry")
+            errors.append(f"{name}：manifest 中的 targets 必须与索引一致")
     return errors
 
 
@@ -180,19 +196,19 @@ def validate_registry(selected_name: str | None = None) -> list[str]:
     entries = registry["skills"]
     for index, skill in enumerate(entries):
         if not isinstance(skill, dict):
-            errors.append(f"registry entry {index} must be an object")
+            errors.append(f"索引中第 {index} 个条目必须是对象")
             continue
         name = skill.get("name")
         if selected_name is not None and name != selected_name:
             continue
         if name in seen:
-            errors.append(f"duplicate registry skill: {name}")
+            errors.append(f"索引中存在重复 Skill：{name}")
         if isinstance(name, str):
             seen.add(name)
         errors.extend(validate_skill(skill))
 
     if selected_name is not None and selected_name not in seen:
-        errors.append(f"Skill not found: {selected_name}")
+        errors.append(f"找不到 Skill：{selected_name}")
 
     if selected_name is None:
         registered_paths = {
@@ -203,7 +219,7 @@ def validate_registry(selected_name: str | None = None) -> list[str]:
         skills_root = ROOT / "skills"
         for skill_md in sorted(skills_root.glob("*/SKILL.md")):
             if skill_md.parent.resolve() not in registered_paths:
-                errors.append(f"unregistered skill directory: {skill_md.parent.name}")
+                errors.append(f"未登记到索引的 Skill 目录：{skill_md.parent.name}")
     return errors
 
 
@@ -215,7 +231,7 @@ def project_root(project_dir: str | None) -> Path:
     if project_dir:
         root = Path(project_dir).expanduser().resolve()
         if not root.is_dir():
-            raise SkillError(f"Project directory does not exist: {root}")
+            raise SkillError(f"项目目录不存在：{root}")
         return root
     current = Path.cwd().resolve()
     for candidate in (current, *current.parents):
@@ -245,9 +261,9 @@ def target_root(target: str, scope: str, project_dir: str | None) -> Path:
 def install_one(source: Path, destination: Path, force: bool) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists() and not force:
-        raise SkillError(f"Destination exists (use --force to replace): {destination}")
+        raise SkillError(f"目标已存在（使用 --force 替换）：{destination}")
     if destination.is_symlink() and force:
-        raise SkillError(f"Refusing to replace a symlink: {destination}")
+        raise SkillError(f"拒绝替换符号链接：{destination}")
 
     staging_parent = Path(tempfile.mkdtemp(prefix=f".{destination.name}-", dir=destination.parent))
     staged = staging_parent / destination.name
@@ -256,7 +272,7 @@ def install_one(source: Path, destination: Path, force: bool) -> None:
         shutil.copytree(source, staged, symlinks=False)
         if destination.exists():
             if backup.exists():
-                raise SkillError(f"Backup path unexpectedly exists: {backup}")
+                raise SkillError(f"备份路径意外存在：{backup}")
             destination.rename(backup)
         staged.rename(destination)
         if backup.exists():
@@ -268,6 +284,14 @@ def install_one(source: Path, destination: Path, force: bool) -> None:
     finally:
         if staging_parent.exists():
             shutil.rmtree(staging_parent)
+
+
+def display_width(value: str) -> int:
+    return sum(2 if unicodedata.east_asian_width(char) in {"W", "F"} else 1 for char in value)
+
+
+def pad_display(value: str, width: int) -> str:
+    return value + " " * max(0, width - display_width(value))
 
 
 def command_list(query: str | None = None) -> None:
@@ -286,12 +310,15 @@ def command_list(query: str | None = None) -> None:
             ).casefold()
         ]
     if not skills:
-        print("No skills found.")
+        print("没有找到 Skill。")
         return
-    width = max(len("NAME"), *(len(str(skill["name"])) for skill in skills))
-    print(f"{'NAME':<{width}}  {'VERSION':<12}  DESCRIPTION")
+    width = max(display_width("名称"), *(display_width(str(skill["name"])) for skill in skills))
+    print(f"{pad_display('名称', width)}  {pad_display('版本', 12)}  说明")
     for skill in sorted(skills, key=lambda item: item["name"]):
-        print(f"{skill['name']:<{width}}  {skill['version']:<12}  {skill['description']}")
+        print(
+            f"{pad_display(skill['name'], width)}  "
+            f"{pad_display(skill['version'], 12)}  {skill['description']}"
+        )
 
 
 def command_info(name: str) -> None:
@@ -302,30 +329,30 @@ def command_validate(name: str | None) -> None:
     errors = validate_registry(name)
     if errors:
         for error in errors:
-            print(f"ERROR: {error}", file=sys.stderr)
-        raise SkillError(f"Validation failed with {len(errors)} error(s)")
-    print(f"Validation passed: {name or 'all skills'}")
+            print(f"错误：{error}", file=sys.stderr)
+        raise SkillError(f"校验失败，共发现 {len(errors)} 个错误")
+    print(f"校验通过：{name or '全部 Skills'}")
 
 
 def command_install(args: argparse.Namespace, force: bool = False) -> None:
     skill = require_skill(args.name)
     errors = validate_skill(skill)
     if errors:
-        raise SkillError("Cannot install an invalid skill:\n- " + "\n- ".join(errors))
+        raise SkillError("无法安装未通过校验的 Skill：\n- " + "\n- ".join(errors))
     source = skill_source(skill)
     declared_targets = set(skill["targets"])
     for target in expand_targets(args.target):
         if DECLARED_TARGETS[target] not in declared_targets:
-            raise SkillError(f"{args.name} does not declare support for target: {target}")
+            raise SkillError(f"{args.name} 未声明支持目标客户端：{target}")
         destination = target_root(target, args.scope, args.project_dir) / args.name
         install_one(source, destination, force or args.force)
-        print(f"Installed {args.name} -> {target}: {destination}")
+        print(f"已安装 {args.name} -> {target}：{destination}")
 
 
 def command_uninstall(args: argparse.Namespace) -> None:
     require_skill(args.name)
     if not args.yes:
-        raise SkillError("Uninstall requires --yes")
+        raise SkillError("卸载时必须传入 --yes")
     for target in expand_targets(args.target):
         destination = target_root(target, args.scope, args.project_dir) / args.name
         if destination.is_symlink():
@@ -333,11 +360,11 @@ def command_uninstall(args: argparse.Namespace) -> None:
         elif destination.is_dir():
             shutil.rmtree(destination)
         elif destination.exists():
-            raise SkillError(f"Refusing to remove non-directory target: {destination}")
+            raise SkillError(f"拒绝删除非目录目标：{destination}")
         else:
-            print(f"Not installed for {target}: {destination}")
+            print(f"未安装到 {target}：{destination}")
             continue
-        print(f"Uninstalled {args.name} from {target}: {destination}")
+        print(f"已从 {target} 卸载 {args.name}：{destination}")
 
 
 def add_destination_options(parser: argparse.ArgumentParser) -> None:
@@ -345,45 +372,47 @@ def add_destination_options(parser: argparse.ArgumentParser) -> None:
         "--target",
         choices=(*SUPPORTED_TARGETS, "all"),
         default="codex",
-        help="client target (default: codex)",
+        help="目标客户端（默认：codex）",
     )
     parser.add_argument(
         "--scope",
         choices=("user", "project"),
         default="user",
-        help="installation scope (default: user)",
+        help="安装范围（默认：user）",
     )
     parser.add_argument(
         "--project-dir",
-        help="project root for project scope; defaults to the nearest Git root",
+        help="project 范围使用的项目根目录；默认为最近的 Git 根目录",
     )
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="skill", description=__doc__)
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser = ChineseArgumentParser(prog="skill", description=__doc__)
+    subparsers = parser.add_subparsers(
+        dest="command", required=True, parser_class=ChineseArgumentParser
+    )
 
-    subparsers.add_parser("list", help="list registered skills")
-    search = subparsers.add_parser("search", help="search skill names, descriptions, and tags")
-    search.add_argument("query")
-    info = subparsers.add_parser("info", help="show registry metadata for a skill")
-    info.add_argument("name")
-    validate = subparsers.add_parser("validate", help="validate one skill or the entire registry")
-    validate.add_argument("name", nargs="?")
+    subparsers.add_parser("list", help="列出已登记的 Skills")
+    search = subparsers.add_parser("search", help="搜索 Skill 名称、说明和标签")
+    search.add_argument("query", metavar="关键词")
+    info = subparsers.add_parser("info", help="显示 Skill 在索引中的元数据")
+    info.add_argument("name", metavar="Skill名称")
+    validate = subparsers.add_parser("validate", help="校验单个 Skill 或整个索引")
+    validate.add_argument("name", nargs="?", metavar="Skill名称")
 
-    install = subparsers.add_parser("install", help="install a skill")
-    install.add_argument("name")
+    install = subparsers.add_parser("install", help="安装 Skill")
+    install.add_argument("name", metavar="Skill名称")
     add_destination_options(install)
-    install.add_argument("--force", action="store_true", help="replace an existing installation")
+    install.add_argument("--force", action="store_true", help="替换已存在的安装")
 
-    update = subparsers.add_parser("update", help="replace an installed skill with the repository copy")
-    update.add_argument("name")
+    update = subparsers.add_parser("update", help="使用仓库中的副本替换已安装的 Skill")
+    update.add_argument("name", metavar="Skill名称")
     add_destination_options(update)
 
-    uninstall = subparsers.add_parser("uninstall", help="remove an installed skill")
-    uninstall.add_argument("name")
+    uninstall = subparsers.add_parser("uninstall", help="卸载已安装的 Skill")
+    uninstall.add_argument("name", metavar="Skill名称")
     add_destination_options(uninstall)
-    uninstall.add_argument("--yes", action="store_true", help="confirm removal")
+    uninstall.add_argument("--yes", action="store_true", help="确认卸载")
     return parser
 
 

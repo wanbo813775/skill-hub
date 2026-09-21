@@ -1,4 +1,4 @@
-name: Validate skills
+name: 校验 Skills
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Validate registry and skills
+      - name: 校验索引和 Skills
         run: ./scripts/skill validate
-      - name: Test CLI
+      - name: 测试 CLI
         run: python -m unittest discover -s tests -v

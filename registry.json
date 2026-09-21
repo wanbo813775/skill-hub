@@ -3,8 +3,8 @@
   "skills": [
     {
       "name": "spring-boot-review",
-      "version": "1.0.0",
-      "description": "Review Spring Boot projects for architecture, security, API design, data access, performance, and maintainability.",
+      "version": "1.0.1",
+      "description": "审查 Spring Boot 项目的架构、安全性、API 设计、数据访问、性能和可维护性。",
       "path": "skills/spring-boot-review",
       "targets": [
         "codex",
@@ -14,8 +14,8 @@
       "tags": [
         "java",
         "spring-boot",
-        "review",
-        "security"
+        "代码审查",
+        "安全"
       ]
     }
   ]

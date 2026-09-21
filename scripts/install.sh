@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <skill> [codex|claude|deepseek|all] [additional options]" >&2
+  echo "用法：$0 <skill> [codex|claude|deepseek|all] [其他选项]" >&2
   exit 2
 fi
 

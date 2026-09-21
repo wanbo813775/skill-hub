@@ -1,47 +1,47 @@
-# Spring Boot review checklist
+# Spring Boot 审查清单
 
-Read only the sections relevant to the requested review.
+只读取与当前审查请求相关的章节。
 
-## Architecture and boundaries
+## 架构与边界
 
-- Package and module boundaries reflect business responsibilities rather than accidental framework groupings.
-- Controllers handle transport concerns without owning business transactions.
-- Dependency direction does not create cycles or couple domain logic to infrastructure unnecessarily.
-- Transaction boundaries are explicit and cover the full unit of work.
+- 包和模块边界反映业务职责，而不是仅按框架类型分组。
+- Controller 只处理传输层职责，不直接承担业务事务。
+- 依赖方向不会产生循环，也不会让领域逻辑不必要地耦合基础设施。
+- 事务边界明确，并覆盖完整的工作单元。
 
-## HTTP and API contracts
+## HTTP 与 API 契约
 
-- Request validation covers nested objects and domain constraints.
-- Status codes, error bodies, pagination, and idempotency behavior are consistent.
-- Domain entities are not unintentionally exposed as public request or response contracts.
-- Exception handling does not leak stack traces, SQL details, or secrets.
+- 请求校验覆盖嵌套对象和领域约束。
+- 状态码、错误响应体、分页和幂等行为保持一致。
+- 领域实体不会被意外暴露为公开请求或响应契约。
+- 异常处理不会泄露堆栈跟踪、SQL 细节或密钥。
 
-## Security
+## 安全性
 
-- Authentication and authorization rules cover every sensitive route and method.
-- Method security, path matchers, CORS, CSRF, session policy, and password handling match the application type.
-- Inputs used in SQL, file paths, templates, redirects, logs, or outbound requests are constrained appropriately.
-- Secrets are not committed, logged, returned, or embedded in images and build artifacts.
-- Dependency or configuration findings are tied to the versions and deployment mode actually in use.
+- 身份认证和授权规则覆盖每个敏感路由和方法。
+- 方法级安全、路径匹配、CORS、CSRF、会话策略和密码处理与应用类型一致。
+- 对用于 SQL、文件路径、模板、重定向、日志或外部请求的输入进行适当限制。
+- 密钥不会被提交、记录、返回，或嵌入镜像和构建产物。
+- 依赖或配置问题与项目实际使用的版本和部署方式相关联。
 
-## Persistence and data integrity
+## 持久化与数据完整性
 
-- Queries avoid unbounded reads, N+1 access, and missing pagination where data can grow.
-- Entity equality, lazy loading, cascading, and serialization do not create correctness or performance hazards.
-- Migrations are safe for existing data and compatible with rolling deployment when required.
-- Concurrency-sensitive updates use appropriate constraints, locking, or optimistic versioning.
+- 查询避免无界读取、N+1 访问，并在数据可能增长的场景使用分页。
+- 实体相等性、延迟加载、级联和序列化不会导致正确性或性能风险。
+- 数据库迁移对现有数据安全，并在需要时兼容滚动部署。
+- 并发敏感更新使用适当的约束、锁或乐观版本控制。
 
-## Reliability and operations
+## 可靠性与运维
 
-- Timeouts, retries, circuit breaking, and connection pools are configured for external dependencies.
-- Retry behavior is idempotent and does not multiply side effects.
-- Logs are actionable without exposing personal data, tokens, or credentials.
-- Health checks distinguish liveness from readiness and do not overload dependencies.
-- Shutdown, scheduled jobs, async execution, and thread pools have explicit lifecycle and capacity behavior.
+- 外部依赖配置了超时、重试、熔断和连接池。
+- 重试行为具有幂等性，不会放大副作用。
+- 日志便于排查问题，同时不暴露个人数据、令牌或凭据。
+- 健康检查区分存活和就绪状态，并且不会压垮依赖服务。
+- 关闭、定时任务、异步执行和线程池具有明确的生命周期和容量策略。
 
-## Tests and maintainability
+## 测试与可维护性
 
-- Tests cover authorization boundaries, validation, error contracts, transactions, and failure paths.
-- Integration tests exercise important framework configuration that unit tests cannot validate.
-- Configuration profiles do not silently weaken production behavior.
-- Custom abstractions remove real duplication without obscuring standard Spring behavior.
+- 测试覆盖授权边界、输入校验、错误契约、事务和失败路径。
+- 集成测试覆盖单元测试无法验证的重要框架配置。
+- 不同环境的配置不会在无明确提示的情况下削弱生产环境行为。
+- 自定义抽象只用于消除实际重复，不会遮蔽 Spring 的标准行为。

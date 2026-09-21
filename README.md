@@ -1,4 +1,4 @@
-# Agent Skill Hub
+# Agent Skill Hub（智能体技能中心）
 
 一个用 GitHub 统一维护、检索和安装 Agent Skills 的仓库。同一份 `SKILL.md` 尽可能同时供以下客户端使用：
 
@@ -34,7 +34,7 @@ skill-hub/
 ```yaml
 ---
 name: example-skill
-description: Explain what the skill does and when an agent should use it.
+description: 说明这个 Skill 能做什么，以及 Agent 应在什么情况下使用它。
 ---
 ```
 
@@ -69,7 +69,7 @@ description: Explain what the skill does and when an agent should use it.
 
 目标目录：
 
-| Target | 用户级 | 项目级 |
+| 目标客户端 | 用户级 | 项目级 |
 |---|---|---|
 | Codex | `~/.agents/skills` | `<project>/.agents/skills` |
 | Claude Code | `~/.claude/skills` | `<project>/.claude/skills` |
@@ -113,6 +113,6 @@ skill list
 
 当前路径约定参考 [OpenAI Skills 文档](https://learn.chatgpt.com/docs/build-skills)、[Claude Agent Skills 文档](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) 和 [DeepSeek Harness Skills 文档](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/skills.md)。
 
-## License
+## 开源许可
 
 [MIT](LICENSE)
