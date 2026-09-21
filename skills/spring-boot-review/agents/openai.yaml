@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spring Boot Review"
+  short_description: "Review Spring Boot projects for engineering risks"
+  default_prompt: "Use $spring-boot-review to review this Spring Boot project and report prioritized findings."

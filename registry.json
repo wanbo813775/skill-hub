@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "skills": [
+    {
+      "name": "spring-boot-review",
+      "version": "1.0.0",
+      "description": "Review Spring Boot projects for architecture, security, API design, data access, performance, and maintainability.",
+      "path": "skills/spring-boot-review",
+      "targets": [
+        "codex",
+        "claude-code",
+        "deepseek-harness"
+      ],
+      "tags": [
+        "java",
+        "spring-boot",
+        "review",
+        "security"
+      ]
+    }
+  ]
+}

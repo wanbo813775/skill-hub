@@ -1,0 +1,415 @@
+#!/usr/bin/env python3
+"""Dependency-free CLI for the Agent Skill Hub."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+from typing import Iterable
+
+
+ROOT = Path(__file__).resolve().parent.parent
+REGISTRY_PATH = ROOT / "registry.json"
+NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+SUPPORTED_TARGETS = ("codex", "claude", "deepseek")
+DECLARED_TARGETS = {
+    "codex": "codex",
+    "claude": "claude-code",
+    "deepseek": "deepseek-harness",
+}
+
+
+class SkillError(Exception):
+    pass
+
+
+def load_registry() -> dict:
+    try:
+        data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise SkillError(f"Registry not found: {REGISTRY_PATH}") from exc
+    except json.JSONDecodeError as exc:
+        raise SkillError(f"Invalid registry.json: {exc}") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("skills"), list):
+        raise SkillError("registry.json must contain a 'skills' array")
+    return data
+
+
+def skills_by_name() -> dict[str, dict]:
+    result: dict[str, dict] = {}
+    for skill in load_registry()["skills"]:
+        if isinstance(skill, dict) and isinstance(skill.get("name"), str):
+            result[skill["name"]] = skill
+    return result
+
+
+def require_skill(name: str) -> dict:
+    skill = skills_by_name().get(name)
+    if skill is None:
+        raise SkillError(f"Skill not found: {name}")
+    return skill
+
+
+def skill_source(skill: dict) -> Path:
+    raw_path = skill.get("path")
+    if not isinstance(raw_path, str):
+        raise SkillError(f"Skill {skill.get('name', '<unknown>')} has no valid path")
+    source = (ROOT / raw_path).resolve()
+    skills_root = (ROOT / "skills").resolve()
+    if source.parent != skills_root:
+        raise SkillError(f"Skill path must be a direct child of {skills_root}: {raw_path}")
+    return source
+
+
+def parse_frontmatter(path: Path) -> dict[str, str]:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise SkillError(f"Missing SKILL.md: {path}") from exc
+    lines = content.splitlines()
+    if not lines or lines[0].strip() != "---":
+        raise SkillError(f"{path}: YAML frontmatter must start on the first line")
+    try:
+        end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+    except StopIteration as exc:
+        raise SkillError(f"{path}: YAML frontmatter is not closed") from exc
+    metadata: dict[str, str] = {}
+    for line in lines[1:end]:
+        match = re.match(r"^([A-Za-z0-9_-]+):\s*(.*?)\s*$", line)
+        if match:
+            metadata[match.group(1)] = match.group(2).strip("'\"")
+    return metadata
+
+
+def manifest_scalar(path: Path, key: str) -> str | None:
+    if not path.is_file():
+        return None
+    pattern = re.compile(rf"^{re.escape(key)}:\s*([^#\n]+?)\s*$", re.MULTILINE)
+    match = pattern.search(path.read_text(encoding="utf-8"))
+    return match.group(1).strip("'\"") if match else None
+
+
+def manifest_list(path: Path, key: str) -> list[str]:
+    if not path.is_file():
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    values: list[str] = []
+    in_list = False
+    for line in lines:
+        if line == f"{key}:":
+            in_list = True
+            continue
+        if not in_list:
+            continue
+        match = re.match(r"^\s+-\s+(.+?)\s*$", line)
+        if match:
+            values.append(match.group(1).strip("'\""))
+            continue
+        if line and not line[0].isspace():
+            break
+    return values
+
+
+def validate_skill(skill: dict) -> list[str]:
+    errors: list[str] = []
+    name = skill.get("name")
+    if not isinstance(name, str) or not NAME_PATTERN.fullmatch(name) or len(name) > 64:
+        return [f"invalid registry name: {name!r}"]
+
+    try:
+        source = skill_source(skill)
+    except SkillError as exc:
+        return [str(exc)]
+    if source.name != name:
+        errors.append(f"{name}: directory must be named {name}")
+    if not source.is_dir():
+        errors.append(f"{name}: source directory does not exist: {source}")
+        return errors
+
+    try:
+        metadata = parse_frontmatter(source / "SKILL.md")
+    except SkillError as exc:
+        errors.append(str(exc))
+        metadata = {}
+    if metadata.get("name") != name:
+        errors.append(f"{name}: SKILL.md name must match registry")
+    description = metadata.get("description", "")
+    if not description:
+        errors.append(f"{name}: SKILL.md description is required")
+    elif len(description) > 1024:
+        errors.append(f"{name}: SKILL.md description exceeds 1024 characters")
+
+    version = skill.get("version")
+    if not isinstance(version, str) or not VERSION_PATTERN.fullmatch(version):
+        errors.append(f"{name}: version must use semantic versioning")
+    registry_description = skill.get("description")
+    if not isinstance(registry_description, str) or not registry_description.strip():
+        errors.append(f"{name}: registry description is required")
+    targets = skill.get("targets")
+    if not isinstance(targets, list) or not targets:
+        errors.append(f"{name}: targets must be a non-empty array")
+    elif unknown := sorted(set(targets) - set(DECLARED_TARGETS.values())):
+        errors.append(f"{name}: unsupported targets: {', '.join(unknown)}")
+
+    manifest = source / "manifest.yaml"
+    if not manifest.is_file():
+        errors.append(f"{name}: manifest.yaml is required by this repository")
+    else:
+        if manifest_scalar(manifest, "name") != name:
+            errors.append(f"{name}: manifest name must match registry")
+        if manifest_scalar(manifest, "version") != version:
+            errors.append(f"{name}: manifest version must match registry")
+        if manifest_scalar(manifest, "entrypoint") != "SKILL.md":
+            errors.append(f"{name}: manifest entrypoint must be SKILL.md")
+        if set(manifest_list(manifest, "targets")) != set(targets or []):
+            errors.append(f"{name}: manifest targets must match registry")
+    return errors
+
+
+def validate_registry(selected_name: str | None = None) -> list[str]:
+    registry = load_registry()
+    errors: list[str] = []
+    seen: set[str] = set()
+    entries = registry["skills"]
+    for index, skill in enumerate(entries):
+        if not isinstance(skill, dict):
+            errors.append(f"registry entry {index} must be an object")
+            continue
+        name = skill.get("name")
+        if selected_name is not None and name != selected_name:
+            continue
+        if name in seen:
+            errors.append(f"duplicate registry skill: {name}")
+        if isinstance(name, str):
+            seen.add(name)
+        errors.extend(validate_skill(skill))
+
+    if selected_name is not None and selected_name not in seen:
+        errors.append(f"Skill not found: {selected_name}")
+
+    if selected_name is None:
+        registered_paths = {
+            (ROOT / skill["path"]).resolve()
+            for skill in entries
+            if isinstance(skill, dict) and isinstance(skill.get("path"), str)
+        }
+        skills_root = ROOT / "skills"
+        for skill_md in sorted(skills_root.glob("*/SKILL.md")):
+            if skill_md.parent.resolve() not in registered_paths:
+                errors.append(f"unregistered skill directory: {skill_md.parent.name}")
+    return errors
+
+
+def expand_targets(target: str) -> tuple[str, ...]:
+    return SUPPORTED_TARGETS if target == "all" else (target,)
+
+
+def project_root(project_dir: str | None) -> Path:
+    if project_dir:
+        root = Path(project_dir).expanduser().resolve()
+        if not root.is_dir():
+            raise SkillError(f"Project directory does not exist: {root}")
+        return root
+    current = Path.cwd().resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return current
+
+
+def target_root(target: str, scope: str, project_dir: str | None) -> Path:
+    if scope == "user":
+        dsh_home = Path(os.environ.get("DSH_HOME", str(Path.home() / ".dsh"))).expanduser()
+        roots = {
+            "codex": Path.home() / ".agents" / "skills",
+            "claude": Path.home() / ".claude" / "skills",
+            "deepseek": dsh_home / "skills",
+        }
+    else:
+        base = project_root(project_dir)
+        roots = {
+            "codex": base / ".agents" / "skills",
+            "claude": base / ".claude" / "skills",
+            "deepseek": base / ".dsh" / "skills",
+        }
+    return roots[target]
+
+
+def install_one(source: Path, destination: Path, force: bool) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() and not force:
+        raise SkillError(f"Destination exists (use --force to replace): {destination}")
+    if destination.is_symlink() and force:
+        raise SkillError(f"Refusing to replace a symlink: {destination}")
+
+    staging_parent = Path(tempfile.mkdtemp(prefix=f".{destination.name}-", dir=destination.parent))
+    staged = staging_parent / destination.name
+    backup = destination.parent / f".{destination.name}.backup-{os.getpid()}"
+    try:
+        shutil.copytree(source, staged, symlinks=False)
+        if destination.exists():
+            if backup.exists():
+                raise SkillError(f"Backup path unexpectedly exists: {backup}")
+            destination.rename(backup)
+        staged.rename(destination)
+        if backup.exists():
+            shutil.rmtree(backup)
+    except Exception:
+        if backup.exists() and not destination.exists():
+            backup.rename(destination)
+        raise
+    finally:
+        if staging_parent.exists():
+            shutil.rmtree(staging_parent)
+
+
+def command_list(query: str | None = None) -> None:
+    skills = list(skills_by_name().values())
+    if query:
+        needle = query.casefold()
+        skills = [
+            skill
+            for skill in skills
+            if needle in " ".join(
+                [
+                    str(skill.get("name", "")),
+                    str(skill.get("description", "")),
+                    " ".join(skill.get("tags", [])),
+                ]
+            ).casefold()
+        ]
+    if not skills:
+        print("No skills found.")
+        return
+    width = max(len("NAME"), *(len(str(skill["name"])) for skill in skills))
+    print(f"{'NAME':<{width}}  {'VERSION':<12}  DESCRIPTION")
+    for skill in sorted(skills, key=lambda item: item["name"]):
+        print(f"{skill['name']:<{width}}  {skill['version']:<12}  {skill['description']}")
+
+
+def command_info(name: str) -> None:
+    print(json.dumps(require_skill(name), ensure_ascii=False, indent=2))
+
+
+def command_validate(name: str | None) -> None:
+    errors = validate_registry(name)
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        raise SkillError(f"Validation failed with {len(errors)} error(s)")
+    print(f"Validation passed: {name or 'all skills'}")
+
+
+def command_install(args: argparse.Namespace, force: bool = False) -> None:
+    skill = require_skill(args.name)
+    errors = validate_skill(skill)
+    if errors:
+        raise SkillError("Cannot install an invalid skill:\n- " + "\n- ".join(errors))
+    source = skill_source(skill)
+    declared_targets = set(skill["targets"])
+    for target in expand_targets(args.target):
+        if DECLARED_TARGETS[target] not in declared_targets:
+            raise SkillError(f"{args.name} does not declare support for target: {target}")
+        destination = target_root(target, args.scope, args.project_dir) / args.name
+        install_one(source, destination, force or args.force)
+        print(f"Installed {args.name} -> {target}: {destination}")
+
+
+def command_uninstall(args: argparse.Namespace) -> None:
+    require_skill(args.name)
+    if not args.yes:
+        raise SkillError("Uninstall requires --yes")
+    for target in expand_targets(args.target):
+        destination = target_root(target, args.scope, args.project_dir) / args.name
+        if destination.is_symlink():
+            destination.unlink()
+        elif destination.is_dir():
+            shutil.rmtree(destination)
+        elif destination.exists():
+            raise SkillError(f"Refusing to remove non-directory target: {destination}")
+        else:
+            print(f"Not installed for {target}: {destination}")
+            continue
+        print(f"Uninstalled {args.name} from {target}: {destination}")
+
+
+def add_destination_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--target",
+        choices=(*SUPPORTED_TARGETS, "all"),
+        default="codex",
+        help="client target (default: codex)",
+    )
+    parser.add_argument(
+        "--scope",
+        choices=("user", "project"),
+        default="user",
+        help="installation scope (default: user)",
+    )
+    parser.add_argument(
+        "--project-dir",
+        help="project root for project scope; defaults to the nearest Git root",
+    )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="skill", description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    subparsers.add_parser("list", help="list registered skills")
+    search = subparsers.add_parser("search", help="search skill names, descriptions, and tags")
+    search.add_argument("query")
+    info = subparsers.add_parser("info", help="show registry metadata for a skill")
+    info.add_argument("name")
+    validate = subparsers.add_parser("validate", help="validate one skill or the entire registry")
+    validate.add_argument("name", nargs="?")
+
+    install = subparsers.add_parser("install", help="install a skill")
+    install.add_argument("name")
+    add_destination_options(install)
+    install.add_argument("--force", action="store_true", help="replace an existing installation")
+
+    update = subparsers.add_parser("update", help="replace an installed skill with the repository copy")
+    update.add_argument("name")
+    add_destination_options(update)
+
+    uninstall = subparsers.add_parser("uninstall", help="remove an installed skill")
+    uninstall.add_argument("name")
+    add_destination_options(uninstall)
+    uninstall.add_argument("--yes", action="store_true", help="confirm removal")
+    return parser
+
+
+def main(argv: Iterable[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        if args.command == "list":
+            command_list()
+        elif args.command == "search":
+            command_list(args.query)
+        elif args.command == "info":
+            command_info(args.name)
+        elif args.command == "validate":
+            command_validate(args.name)
+        elif args.command == "install":
+            command_install(args)
+        elif args.command == "update":
+            args.force = True
+            command_install(args, force=True)
+        elif args.command == "uninstall":
+            command_uninstall(args)
+        return 0
+    except SkillError as exc:
+        print(f"skill: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
