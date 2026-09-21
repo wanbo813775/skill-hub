@@ -1,4 +1,0 @@
-interface:
-  display_name: "Spring Boot 项目审查"
-  short_description: "审查 Spring Boot 项目中的工程风险"
-  default_prompt: "使用 $spring-boot-review 审查这个 Spring Boot 项目，并按优先级报告问题。"

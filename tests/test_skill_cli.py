@@ -29,25 +29,31 @@ class SkillCliTest(unittest.TestCase):
 
     def test_validate_and_search(self):
         self.assertIn("校验通过", self.run_cli("validate").stdout)
-        self.assertIn("spring-boot-review", self.run_cli("search", "spring").stdout)
+        self.assertIn("alibaba-java-guidelines", self.run_cli("list").stdout)
+        self.assertIn("alibaba-java-guidelines", self.run_cli("search", "阿里巴巴").stdout)
         self.assertIn("没有找到 Skill", self.run_cli("search", "missing-query").stdout)
+
+    def test_unknown_skill_is_rejected(self):
+        result = self.run_cli("install", "not-registered", expected=1)
+        self.assertIn("找不到 Skill", result.stderr)
 
     def test_install_update_and_uninstall_user_skill(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
-            destination = home / ".agents" / "skills" / "spring-boot-review"
+            destination = home / ".agents" / "skills" / "alibaba-java-guidelines"
 
-            self.run_cli("install", "spring-boot-review", "--target", "codex", home=home)
+            self.run_cli("install", "alibaba-java-guidelines", "--target", "codex", home=home)
             self.assertTrue((destination / "SKILL.md").is_file())
+            self.assertTrue((destination / "references" / "mysql.md").is_file())
 
             duplicate = self.run_cli(
-                "install", "spring-boot-review", "--target", "codex", home=home, expected=1
+                "install", "alibaba-java-guidelines", "--target", "codex", home=home, expected=1
             )
             self.assertIn("目标已存在", duplicate.stderr)
 
-            self.run_cli("update", "spring-boot-review", "--target", "codex", home=home)
+            self.run_cli("update", "alibaba-java-guidelines", "--target", "codex", home=home)
             self.run_cli(
-                "uninstall", "spring-boot-review", "--target", "codex", "--yes", home=home
+                "uninstall", "alibaba-java-guidelines", "--target", "codex", "--yes", home=home
             )
             self.assertFalse(destination.exists())
 
@@ -56,7 +62,7 @@ class SkillCliTest(unittest.TestCase):
             project = Path(directory)
             self.run_cli(
                 "install",
-                "spring-boot-review",
+                "alibaba-java-guidelines",
                 "--target",
                 "all",
                 "--scope",
@@ -64,9 +70,10 @@ class SkillCliTest(unittest.TestCase):
                 "--project-dir",
                 str(project),
             )
-            self.assertTrue((project / ".agents/skills/spring-boot-review/SKILL.md").is_file())
-            self.assertTrue((project / ".claude/skills/spring-boot-review/SKILL.md").is_file())
-            self.assertTrue((project / ".dsh/skills/spring-boot-review/SKILL.md").is_file())
+            relative = "skills/alibaba-java-guidelines/SKILL.md"
+            self.assertTrue((project / ".agents" / relative).is_file())
+            self.assertTrue((project / ".claude" / relative).is_file())
+            self.assertTrue((project / ".dsh" / relative).is_file())
 
 
 if __name__ == "__main__":

@@ -8,13 +8,19 @@
 
 仓库里的 Skill 是可执行指令，安装前应像审查代码一样审查其 `SKILL.md`、脚本和引用资源。
 
+## 当前 Skills
+
+| 名称 | 用途 |
+|---|---|
+| `alibaba-java-guidelines` | 基于阿里巴巴 Java 开发手册编写、修改和审查 Java 代码、MySQL 设计与技术文档。 |
+
 ## 仓库结构
 
 ```text
 skill-hub/
 ├── registry.json              # Skill 索引
 ├── skills/                    # Skill 源码，一份源码供多个客户端使用
-│   └── spring-boot-review/
+│   └── <skill-name>/
 │       ├── SKILL.md           # 唯一必需入口
 │       ├── manifest.yaml      # Skill Hub 元数据
 │       ├── agents/            # 可选的客户端元数据
@@ -44,24 +50,24 @@ description: 说明这个 Skill 能做什么，以及 Agent 应在什么情况�
 
 ```bash
 ./scripts/skill list
-./scripts/skill search spring
-./scripts/skill info spring-boot-review
+./scripts/skill search 阿里巴巴
+./scripts/skill info alibaba-java-guidelines
 ./scripts/skill validate
 ```
 
 安装到当前用户：
 
 ```bash
-./scripts/skill install spring-boot-review --target codex
-./scripts/skill install spring-boot-review --target claude
-./scripts/skill install spring-boot-review --target deepseek
-./scripts/skill install spring-boot-review --target all
+./scripts/skill install alibaba-java-guidelines --target codex
+./scripts/skill install alibaba-java-guidelines --target claude
+./scripts/skill install alibaba-java-guidelines --target deepseek
+./scripts/skill install alibaba-java-guidelines --target all
 ```
 
 安装到某个项目：
 
 ```bash
-./scripts/skill install spring-boot-review \
+./scripts/skill install alibaba-java-guidelines \
   --target all \
   --scope project \
   --project-dir /path/to/project
@@ -78,13 +84,13 @@ description: 说明这个 Skill 能做什么，以及 Agent 应在什么情况�
 已有同名目录时，安装器默认拒绝覆盖。确认需要替换时使用 `update`，或在 `install` 上显式传入 `--force`：
 
 ```bash
-./scripts/skill update spring-boot-review --target codex
+./scripts/skill update alibaba-java-guidelines --target codex
 ```
 
 卸载需要显式确认：
 
 ```bash
-./scripts/skill uninstall spring-boot-review --target codex --yes
+./scripts/skill uninstall alibaba-java-guidelines --target codex --yes
 ```
 
 如果希望像系统命令一样使用，可以自行创建软链接：

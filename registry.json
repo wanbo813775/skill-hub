@@ -2,10 +2,10 @@
   "schema_version": "1.0.0",
   "skills": [
     {
-      "name": "spring-boot-review",
-      "version": "1.0.1",
-      "description": "审查 Spring Boot 项目的架构、安全性、API 设计、数据访问、性能和可维护性。",
-      "path": "skills/spring-boot-review",
+      "name": "alibaba-java-guidelines",
+      "version": "1.0.0",
+      "description": "基于阿里巴巴 Java 开发手册编写、修改和审查 Java 代码、MySQL 设计与技术文档。",
+      "path": "skills/alibaba-java-guidelines",
       "targets": [
         "codex",
         "claude-code",
@@ -14,8 +14,11 @@
       "tags": [
         "java",
         "spring-boot",
+        "mysql",
+        "阿里巴巴开发手册",
+        "开发规范",
         "代码审查",
-        "安全"
+        "技术文档"
       ]
     }
   ]

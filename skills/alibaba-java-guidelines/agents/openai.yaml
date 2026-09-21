@@ -1,0 +1,4 @@
+interface:
+  display_name: "阿里巴巴 Java 开发规范"
+  short_description: "基于阿里手册编写、审查 Java 代码和技术文档"
+  default_prompt: "使用 $alibaba-java-guidelines 按阿里巴巴 Java 开发规范完成这项开发工作。"
