@@ -29,6 +29,7 @@ skill-hub/
 │   ├── skill                  # 完整 CLI
 │   ├── skill.sh               # 兼容入口
 │   ├── install.sh             # 简化安装入口
+│   ├── install-cli.sh         # 从 GitHub 安装全局 CLI
 │   ├── list.sh                # 简化查询入口
 │   └── validate.sh            # 简化校验入口
 └── .github/workflows/
@@ -44,9 +45,39 @@ description: 说明这个 Skill 能做什么，以及 Agent 应在什么情况�
 ---
 ```
 
-## 使用
+## 远程安装（推荐）
 
-直接运行仓库内的 CLI：
+不需要克隆本仓库。先安装全局 CLI：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/wanbo813775/skill-hub/main/scripts/install-cli.sh | bash
+```
+
+如果终端提示 `skill` 命令不存在，将 `~/.local/bin` 加入 `PATH`：
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+之后可以在任意目录运行：
+
+```bash
+skill list
+skill search 阿里巴巴
+skill install alibaba-java-guidelines --target codex
+```
+
+`skill` 会自动从 GitHub 读取最新索引，并只安装选中的 Skill。以后更新时运行：
+
+```bash
+skill update alibaba-java-guidelines --target codex
+```
+
+重新执行 CLI 安装命令即可更新 `skill` 命令本身。
+
+## 本地仓库开发
+
+克隆仓库后，可直接运行内置 CLI 来开发和校验 Skill：
 
 ```bash
 ./scripts/skill list
@@ -91,13 +122,6 @@ description: 说明这个 Skill 能做什么，以及 Agent 应在什么情况�
 
 ```bash
 ./scripts/skill uninstall alibaba-java-guidelines --target codex --yes
-```
-
-如果希望像系统命令一样使用，可以自行创建软链接：
-
-```bash
-ln -s "$(pwd)/scripts/skill" /usr/local/bin/skill
-skill list
 ```
 
 ## 新增 Skill

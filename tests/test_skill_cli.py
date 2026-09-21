@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -74,6 +76,60 @@ class SkillCliTest(unittest.TestCase):
             self.assertTrue((project / ".agents" / relative).is_file())
             self.assertTrue((project / ".claude" / relative).is_file())
             self.assertTrue((project / ".dsh" / relative).is_file())
+
+    def test_global_cli_downloads_skill_from_remote_repository(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sandbox = Path(directory)
+            remote = sandbox / "remote"
+            remote.mkdir()
+            shutil.copy2(ROOT / "registry.json", remote / "registry.json")
+
+            archive = remote / "repository.tar.gz"
+            skill_name = "alibaba-java-guidelines"
+            with tarfile.open(archive, "w:gz") as bundle:
+                bundle.add(
+                    ROOT / "skills" / skill_name,
+                    arcname=f"skill-hub-main/skills/{skill_name}",
+                )
+
+            home = sandbox / "home"
+            bin_dir = home / ".local" / "bin"
+            home.mkdir()
+            env = os.environ.copy()
+            env.update(
+                {
+                    "HOME": str(home),
+                    "SKILL_HUB_BIN_DIR": str(bin_dir),
+                    "SKILL_HUB_CLI_URL": CLI.as_uri(),
+                    "SKILL_HUB_REGISTRY_URL": (remote / "registry.json").as_uri(),
+                    "SKILL_HUB_ARCHIVE_URL": archive.as_uri(),
+                }
+            )
+
+            bootstrap = subprocess.run(
+                ["bash", str(ROOT / "scripts" / "install-cli.sh")],
+                cwd=sandbox,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, bootstrap.returncode, bootstrap.stderr)
+
+            installed_cli = bin_dir / "skill"
+            self.assertTrue(installed_cli.is_file())
+            result = subprocess.run(
+                [str(installed_cli), "install", skill_name, "--target", "codex"],
+                cwd=sandbox,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, result.returncode, result.stderr)
+            installed_skill = home / ".agents" / "skills" / skill_name
+            self.assertTrue((installed_skill / "SKILL.md").is_file())
+            self.assertTrue((installed_skill / "references" / "mysql.md").is_file())
 
 
 if __name__ == "__main__":
